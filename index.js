@@ -1,50 +1,66 @@
 import express from "express";
-import cookieParser from "cookie-parser";
+import cors from "cors";
+import bodyParser from "body-parser";
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
-app.use(express.json());
-app.use(cookieParser());
+app.use(cors());
+app.use(bodyParser.json());
 
-// Supabase connection
-const supabaseUrl = "https://xxxxx.supabase.co"; // ganti dengan Project URL kamu
-const supabaseKey = "eyJhbGci..."; // ganti dengan anon key
-const supabase = createClient(supabaseUrl, supabaseKey);
+// 🔑 Ambil dari Environment Variables (Vercel → Settings → Environment Variables)
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 
-// 1. Tangkap referral
-app.get("/register", (req, res) => {
-  const ref = req.query.ref || null;
-  if (ref) {
-    res.cookie("ref", ref, { maxAge: 7 * 24 * 60 * 60 * 1000 }); // simpan 7 hari
+// Route dasar
+app.get("/", (req, res) => {
+  res.send("Affiliate API is running ✅");
+});
+
+// Simpan referral dari link
+app.get("/ref", async (req, res) => {
+  const teacherCode = req.query.ref;
+  if (!teacherCode) {
+    return res.status(400).send("Kode guru (ref) diperlukan");
   }
-  res.send("Silakan isi form pendaftaran!");
+  res.send(`Referral dari guru: ${teacherCode}`);
 });
 
-// 2. Simpan data siswa baru
-app.post("/submit", async (req, res) => {
-  const { name, email } = req.body;
-  const ref = req.cookies.ref || null;
+// Endpoint pendaftaran siswa baru
+app.post("/register", async (req, res) => {
+  const { name, teacher_code } = req.body;
 
-  const { data, error } = await supabase
-    .from("students")
-    .insert([{ name, email, referrer: ref }]);
+  if (!name || !teacher_code) {
+    return res.status(400).send("Nama dan teacher_code harus diisi");
+  }
 
-  if (error) return res.status(400).json({ error });
-  res.json({ success: true, data });
+  const { data, error } = await supabase.from("students").insert([
+    {
+      name: name,
+      teacher_code: teacher_code
+    }
+  ]);
+
+  if (error) {
+    return res.status(500).send(error.message);
+  }
+
+  res.json({ message: "Pendaftaran berhasil", data });
 });
 
-// 3. Laporan
+// Laporan semua siswa + kode guru
 app.get("/report", async (req, res) => {
-  const { data, error } = await supabase
-    .from("students")
-    .select("referrer, count(*)")
-    .group("referrer");
+  const { data, error } = await supabase.from("students").select("*");
 
-  if (error) return res.status(400).json({ error });
+  if (error) {
+    return res.status(500).send(error.message);
+  }
+
   res.json(data);
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
-app.get("/", (req, res) => {
-  res.send("Affiliate API is running ✅");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
