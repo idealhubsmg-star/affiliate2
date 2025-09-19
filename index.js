@@ -1,66 +1,57 @@
 import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
+import cookieParser from "cookie-parser";
 import { createClient } from "@supabase/supabase-js";
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(cookieParser());
 
-// 🔑 Ambil dari Environment Variables (Vercel → Settings → Environment Variables)
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+// 🔑 Ambil ENV dari Vercel
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Route dasar
+// ✅ Route test
 app.get("/", (req, res) => {
-  res.send("Affiliate API is running ✅");
+  res.send("✅ Affiliate API is running");
 });
 
-// Simpan referral dari link
-app.get("/ref", async (req, res) => {
-  const teacherCode = req.query.ref;
-  if (!teacherCode) {
-    return res.status(400).send("Kode guru (ref) diperlukan");
-  }
-  res.send(`Referral dari guru: ${teacherCode}`);
+// 🎯 Simpan referral (misalnya link: /ref/GURU123)
+app.get("/ref/:code", (req, res) => {
+  const { code } = req.params;
+  res.cookie("ref", code, { maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 hari
+  res.send(`Referral tersimpan: ${code}`);
 });
 
-// Endpoint pendaftaran siswa baru
+// 📝 Simpan pendaftar baru
 app.post("/register", async (req, res) => {
-  const { name, teacher_code } = req.body;
-
-  if (!name || !teacher_code) {
-    return res.status(400).send("Nama dan teacher_code harus diisi");
-  }
+  const { name, email } = req.body;
+  const ref = req.cookies.ref || null;
 
   const { data, error } = await supabase.from("students").insert([
-    {
-      name: name,
-      teacher_code: teacher_code
-    }
+    { name, email, referred_by: ref },
   ]);
 
   if (error) {
-    return res.status(500).send(error.message);
+    return res.status(500).json({ error: error.message });
   }
 
-  res.json({ message: "Pendaftaran berhasil", data });
+  res.json({ message: "Pendaftar berhasil disimpan", data });
 });
 
-// Laporan semua siswa + kode guru
+// 📊 Lihat laporan pendaftar
 app.get("/report", async (req, res) => {
   const { data, error } = await supabase.from("students").select("*");
 
   if (error) {
-    return res.status(500).send(error.message);
+    return res.status(500).json({ error: error.message });
   }
 
   res.json(data);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// 🚀 Jalankan server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
