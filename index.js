@@ -1,6 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import { createClient } from "@supabase/supabase-js";
+import serverless from "serverless-http";
 
 const app = express();
 app.use(express.json());
@@ -16,10 +17,10 @@ app.get("/", (req, res) => {
   res.send("✅ Affiliate API is running");
 });
 
-// 🎯 Simpan referral (misalnya link: /ref/GURU123)
+// 🎯 Simpan referral
 app.get("/ref/:code", (req, res) => {
   const { code } = req.params;
-  res.cookie("ref", code, { maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 hari
+  res.cookie("ref", code, { maxAge: 7 * 24 * 60 * 60 * 1000 });
   res.send(`Referral tersimpan: ${code}`);
 });
 
@@ -32,26 +33,19 @@ app.post("/register", async (req, res) => {
     { name, email, referred_by: ref },
   ]);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
-  }
+  if (error) return res.status(500).json({ error: error.message });
 
   res.json({ message: "Pendaftar berhasil disimpan", data });
 });
 
-// 📊 Lihat laporan pendaftar
+// 📊 Lihat laporan
 app.get("/report", async (req, res) => {
   const { data, error } = await supabase.from("students").select("*");
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
-  }
+  if (error) return res.status(500).json({ error: error.message });
 
   res.json(data);
 });
 
-// 🚀 Jalankan server
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// 🚀 Export pakai serverless
+export default serverless(app);
